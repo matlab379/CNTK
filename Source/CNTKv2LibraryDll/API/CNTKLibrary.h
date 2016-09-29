@@ -2660,13 +2660,23 @@ namespace CNTK
         CNTK_API operator MomentumValuesPerSample() const;
     };
 
+    /// A collection of additional options that affect parameter updates and 
+    /// are applicable for all standard learners 
+    struct AdditionalLearningOptions
+    {
+        double l1RegularizationWeight = 0.0;
+        double l2RegularizationWeight = 0.0;
+        double gaussianNoiseInjectionStdDev = 0.0;
+        double gradientClippingThresholdPerSample = std::numeric_limits<double>::infinity();
+        bool gradientClippingWithTruncation = true;
+    };
+
     ///
     /// Create an instance of the CNTK built-in SGD learner.
     ///
     CNTK_API LearnerPtr SGDLearner(const std::vector<Parameter>& parameters,
                                    const LearningRatesPerSample& learningRates,
-                                   double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                   bool gradientClippingWithTruncation = true);
+                                   AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
 
     ///
     /// Create an instance of the CNTK built-in Momentum SGD learner.
@@ -2674,8 +2684,7 @@ namespace CNTK
     CNTK_API LearnerPtr MomentumSGDLearner(const std::vector<Parameter>& parameters,
                                            const LearningRatesPerSample& learningRates,
                                            const MomentumValuesPerSample& momentumValues,
-                                           double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                           bool gradientClippingWithTruncation = true);
+                                           AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
 
     ///
     /// Create an instance of the CNTK built-in Nesterov's accelerated SGD learner.
@@ -2683,8 +2692,7 @@ namespace CNTK
     CNTK_API LearnerPtr NesterovLearner(const std::vector<Parameter>& parameters,
                                         const LearningRatesPerSample& learningRates,
                                         const MomentumValuesPerSample& momentumValues,
-                                        double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                        bool gradientClippingWithTruncation = true);
+                                        AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
 
     ///
     /// Create an instance of the CNTK built-in FSAdaGrad (improved AdaGrad) learner.
@@ -2694,8 +2702,7 @@ namespace CNTK
                                          const MomentumValuesPerSample& momentumValues,
                                          const double targetAdagradAvDenom = 0.0025, // 1/400 magic constant 
                                          const size_t adagradT = 2 * 3600 * 100,
-                                         double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                         bool gradientClippingWithTruncation = true);
+                                         AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
 
     ///
     /// Create an instance of the CNTK built-in AdaGrad learner.
@@ -2703,22 +2710,26 @@ namespace CNTK
     CNTK_API LearnerPtr AdaGradLearner(const std::vector<Parameter>& parameters,
                                        const LearningRatesPerSample& learningRates,
                                        bool needAveMultiplier = true,
-                                       double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                       bool gradientClippingWithTruncation = true);
+                                       AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
+
+    /// A group of RMSProp specific configuration options
+    struct RMSPropLearningOptions
+    {
+        double gamma;
+        double inc;
+        double dec;
+        double max;
+        double min;
+    };
 
     ///
     /// Create an instance of the CNTK built-in RMSProp learner.
     ///
     CNTK_API LearnerPtr RMSPropLearner(const std::vector<Parameter>& parameters,
                                        const LearningRatesPerSample& learningRates,
-                                       double gamma,
-                                       double inc,
-                                       double dec,
-                                       double max,
-                                       double min,
+                                       RMSPropLearningOptions rmsPropOptions,
                                        bool needAveMultiplier = true,
-                                       double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
-                                       bool gradientClippingWithTruncation = true);
+                                       AdditionalLearningOptions additionalOptions = AdditionalLearningOptions());
 
     ///
     /// Trainer is the top-level abstraction responsible for the orchestration of the training of a model

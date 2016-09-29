@@ -334,7 +334,7 @@ namespace CNTK
         return{ paddedOutputMapCount, kernelShape };
     }
 
-    inline double MomentumPerMB(double momentumPerSample, size_t minibatchSize)
+    inline double MomentumValueForMB(double momentumPerSample, size_t minibatchSize)
     {
         return std::pow(momentumPerSample, minibatchSize);
     }
