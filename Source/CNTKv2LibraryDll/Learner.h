@@ -40,7 +40,7 @@ namespace CNTK
         // the corresponding parameters) or if the allocation should be deferred to the subclass constructor (which
         // performs allocation that is specific to the particular learner, see FSAdaGrad and RMSProp).
     protected:
-        LearnerBase(const std::unordered_set<Parameter>& parameters, 
+        LearnerBase(const std::vector<Parameter>& parameters, 
                     const LearningRatesPerSample& learningRates,
                     bool allocateSmoothGradients = true,
                     double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
@@ -111,7 +111,7 @@ namespace CNTK
     class LearnerSGD : public LearnerBase
     {
     public:
-        LearnerSGD(const std::unordered_set<Parameter>& parameters, 
+        LearnerSGD(const std::vector<Parameter>& parameters, 
                    const LearningRatesPerSample& learningRates, 
                    bool allocateSmoothGradients = true,
                    double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
@@ -137,7 +137,7 @@ namespace CNTK
     class LearnerMomentumSGD : public LearnerSGD
     {
     public:
-        LearnerMomentumSGD(const std::unordered_set<Parameter>& parameters, 
+        LearnerMomentumSGD(const std::vector<Parameter>& parameters,
                            const LearningRatesPerSample& learningRates,
                            const MomentumValuesPerSample& momentumValues,
                            bool allocateSmoothGradients = true,
@@ -154,7 +154,7 @@ namespace CNTK
     {
     public:
 
-        LearnerNesterov(const std::unordered_set<Parameter>& parameters, 
+        LearnerNesterov(const std::vector<Parameter>& parameters,
                         const LearningRatesPerSample& learningRates,
                         const MomentumValuesPerSample& momentumValues,
                         double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
@@ -169,7 +169,7 @@ namespace CNTK
     {
     public:
 
-        LearnerAdaGrad(const std::unordered_set<Parameter>& parameters, 
+        LearnerAdaGrad(const std::vector<Parameter>& parameters,
                        const LearningRatesPerSample& learningRates,
                        bool needAveMultiplier,
                        double clippingThresholdPerSample = std::numeric_limits<double>::infinity(),
@@ -188,7 +188,7 @@ namespace CNTK
     {
     public:
 
-        LearnerFSAdaGrad(const std::unordered_set<Parameter>& parameters,
+        LearnerFSAdaGrad(const std::vector<Parameter>& parameters,
                          const LearningRatesPerSample& learningRates,
                          const MomentumValuesPerSample& momentumValues,
                          const double targetAdagradAvDenom = 0.0025, // 1/400 magic constant
@@ -213,7 +213,7 @@ namespace CNTK
     {
     public:
 
-        LearnerRMSProp(const std::unordered_set<Parameter>& parameters,
+        LearnerRMSProp(const std::vector<Parameter>& parameters,
                        const LearningRatesPerSample& learningRates,
                        double gamma, double inc, double dec, double max, double min,
                        bool needAveMultiplier,

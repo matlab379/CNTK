@@ -109,7 +109,6 @@ FunctionPtr ResNetClassifier(Variable input, size_t numOutputClasses, const Devi
     size_t poolH = 8;
     size_t poolhStride = 1;
     size_t poolvStride = 1;
-    //size_t numInputChannels = rn3_3->Output().Shape()[rn3_3->Output().Shape().NumAxes() - 1];
     auto pool = Pooling(rn3_3, PoolingType::Average, { poolW, poolH, 1 }, { poolhStride, poolvStride, 1 });
 
     // Output DNN layer
@@ -125,16 +124,13 @@ void TrainResNetCifarClassifer(const DeviceDescriptor& device, bool testSaveAndR
     auto imageStreamInfo = minibatchSource->StreamInfo(L"features");
     auto labelStreamInfo = minibatchSource->StreamInfo(L"labels");
 
-    // Change the input shape [C x H x W] to [W x H x C] form
     auto inputImageShape = imageStreamInfo.m_sampleLayout;
-    inputImageShape = { inputImageShape[2], inputImageShape[1], inputImageShape[0] };
-
     const size_t numOutputClasses = labelStreamInfo.m_sampleLayout[0];
 
-    Variable imageInput(inputImageShape, imageStreamInfo.m_elementType, L"Images");
+    auto imageInput = InputVariable(inputImageShape, imageStreamInfo.m_elementType, L"Images");
     auto classifierOutput = ResNetClassifier(imageInput, numOutputClasses, device, L"classifierOutput");
 
-    auto labelsVar = Variable({ numOutputClasses }, labelStreamInfo.m_elementType, L"Labels");
+    auto labelsVar = InputVariable({ numOutputClasses }, labelStreamInfo.m_elementType, L"Labels");
     auto trainingLoss = CrossEntropyWithSoftmax(classifierOutput, labelsVar, L"lossFunction");
     auto prediction = ClassificationError(classifierOutput, labelsVar, L"predictionError");
 
@@ -155,7 +151,7 @@ void TrainResNetCifarClassifer(const DeviceDescriptor& device, bool testSaveAndR
     Trainer trainer(classifierOutput, trainingLoss, prediction, { SGDLearner(classifierOutput->Parameters(), learningRatePerSample) });
 
     const size_t minibatchSize = 32;
-    size_t numMinibatchesToTrain = 100;
+    size_t numMinibatchesToTrain = 2000;
     size_t outputFrequencyInMinibatches = 20;
     for (size_t i = 0; i < numMinibatchesToTrain; ++i)
     {
@@ -167,5 +163,7 @@ void TrainResNetCifarClassifer(const DeviceDescriptor& device, bool testSaveAndR
 
 void TestCifarResnet()
 {
+#ifndef CPUONLY
     TrainResNetCifarClassifer(DeviceDescriptor::GPUDevice(0), true /*testSaveAndReLoad*/);
+#endif
 }

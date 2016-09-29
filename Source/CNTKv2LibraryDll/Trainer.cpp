@@ -6,6 +6,7 @@
 #include "stdafx.h"
 #include "CNTKLibrary.h"
 #include "Utils.h"
+#include "Function.h"
 
 namespace CNTK
 {
@@ -27,7 +28,8 @@ namespace CNTK
             }
         }
 
-        if (modelParameters != learnerParameters)
+        std::unordered_set<Parameter> modelParametersSet(modelParameters.begin(), modelParameters.end());
+        if (modelParametersSet != learnerParameters)
             InvalidArgument("Trainer ctor: Union of the parameters covered by the specified parameterLearners should match the specified model's parameters");
     }
 
@@ -77,17 +79,17 @@ namespace CNTK
         auto argumentDataShape = argumentValue->Data()->Shape();
         auto mask = argumentValue->Mask();
         size_t numMaskedSamples = (mask != nullptr) ? mask->MaskedCount() : 0;
-        size_t numSamplesInDataArrayView = argumentDataShape.SubShape(argumentVar.Shape().NumAxes()).TotalSize();
+        size_t numSamplesInDataArrayView = argumentDataShape.SubShape(argumentVar.Shape().Rank()).TotalSize();
         if (numMaskedSamples > numSamplesInDataArrayView)
             LogicError("Number of masked values cannot exceed the number of samples that the Value object's Data NDArrayView can hold");
 
         return (numSamplesInDataArrayView - numMaskedSamples);
     }
 
-    double Trainer::TestMinbatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
+    double Trainer::TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
         if (!m_evaluationFunction)
-            InvalidArgument("Trainer::TestMinbatch: Cannot test when no evaluation function was specified during 'this' trainer's construction");
+            InvalidArgument("Trainer::TestMinibatch: Cannot test when no evaluation function was specified during 'this' trainer's construction");
 
         // TODO: Should we refactor this code that is somewhat similar to the prologue of the TrainMinibatch function
         std::unordered_map<Variable, ValuePtr> outputs = { { m_evaluationFunction, nullptr } };
@@ -99,14 +101,28 @@ namespace CNTK
 
     bool Trainer::TrainMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
+        std::unordered_map<Variable, ValuePtr> outputsToFetch = {};
+        return TrainMinibatch(arguments, outputsToFetch, computeDevice);
+    }
+
+    bool Trainer::TrainMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, std::unordered_map<Variable, ValuePtr>& outputsToFetch, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
+    {
         std::unordered_map<Variable, ValuePtr> outputs = { { m_lossFunction, nullptr } };
         if (m_evaluationFunction)
             outputs.insert({ m_evaluationFunction, nullptr });
+
+        outputs.insert(outputsToFetch.begin(), outputsToFetch.end());
 
         auto backPropSate = m_combinedTrainingFunction->Forward(arguments, outputs, computeDevice, { m_lossFunction });
         m_prevMinibatchAggregateTrainingLossValue = outputs[m_lossFunction];
         if (m_evaluationFunction)
             m_prevMinibatchAggregateEvalCriterionValue = outputs[m_evaluationFunction];
+
+        for (auto outputToFetch : outputsToFetch)
+        {
+            if (outputToFetch.second == nullptr)
+                outputsToFetch[outputToFetch.first] = outputs[outputToFetch.first];
+        }
 
         ValuePtr rootGradientValue = MakeSharedObject<Value>(MakeSharedObject<NDArrayView>(m_lossFunction->Output().GetDataType(), m_prevMinibatchAggregateTrainingLossValue->Data()->Shape(), computeDevice), outputs.at(m_lossFunction)->Mask());
         if (m_lossFunction->Output().GetDataType() == DataType::Float)
@@ -140,6 +156,54 @@ namespace CNTK
         }
 
         return anyUpdatesPerformed;
+    }
+
+    static std::wstring GetTrainerStateCheckpointFilePath(const std::wstring& modelFilePath)
+    {
+        const wchar_t* checkpointExt = L".ckp";
+        return modelFilePath + checkpointExt;
+    }
+
+    std::shared_ptr<std::fstream> GetFstream(const std::wstring& filePath, bool readOnly)
+    {
+        std::ios_base::openmode mode = std::ios_base::binary | (readOnly ? std::ios_base::in : std::ios_base::out);
+#ifdef _MSC_VER
+        return std::make_shared<std::fstream>(filePath, mode);
+#else
+        return std::make_shared<std::fstream>(wtocharpath(filePath.c_str()).c_str(), mode);
+#endif
+    }
+
+    void Trainer::SaveCheckpoint(const std::wstring& modelFilePath)
+    {
+        SaveAsLegacyModel(m_combinedTrainingFunction, modelFilePath);
+
+        if (m_parameterLearners.size() > 1)
+            LogicError("Trainer::SaveCheckpoint: Checkpointing is currently unsupported for multiple learners");
+
+        auto learnerState = (*(m_parameterLearners.begin()))->GetCheckpointState();
+        std::wstring trainerStateCheckpointFilePath = GetTrainerStateCheckpointFilePath(modelFilePath);
+        auto ckpStream = GetFstream(trainerStateCheckpointFilePath, false);
+        *ckpStream << learnerState;
+        ckpStream->flush();
+    }
+
+    void Trainer::RestoreFromCheckpoint(const std::wstring& modelFilePath)
+    {
+        // Restore the model's parameters
+        m_combinedTrainingFunction->RestoreFromLegacyModel(modelFilePath);
+
+        // Restore the learner state
+        if (m_parameterLearners.size() > 1)
+            LogicError("Trainer::RestoreFromCheckpoint: Checkpointing is currently unsupported for multiple learners");
+
+        std::wstring trainerStateCheckpointFilePath = GetTrainerStateCheckpointFilePath(modelFilePath);
+        auto ckpStream = GetFstream(trainerStateCheckpointFilePath, true);
+        Dictionary learnerState;
+        *ckpStream >> learnerState;
+
+        auto firstLearner = *(m_parameterLearners.begin());
+        firstLearner->RestoreFromCheckpoint(learnerState);
     }
 
     double Trainer::PreviousMinibatchLossAverage() const

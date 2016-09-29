@@ -23,7 +23,7 @@
 using namespace std; // ugh! TODO: get rid of this from .h files!!!
 
 #define CNTK_CHECKPOINT_VERSION_1 1     // 1 -> no version number 
-#define CNTK_CHECKPOINT_VERSION_2 2     
+#define CNTK_CHECKPOINT_VERSION_2 2      
 #define CURRENT_CNTK_CHECKPOINT_VERSION CNTK_CHECKPOINT_VERSION_2
 
 
@@ -88,7 +88,6 @@ struct GradientUpdateInfo
     float gaussianNoiseInjectStd = 0.0075f;
 
     // for FSAdaGrad:
-    // Note: Currently these cannot be parameterized externally. Once they can, rethink they names!
     double targetAdagradAvDenom = 1;
     size_t varianceTimeConstant = 2 * 3600 * 100; // originally was: 2h of speech
 };
@@ -265,7 +264,7 @@ protected:
     int m_syncStatsTrace;
 
     // Data parallel SGD training parameters
-    int m_numGradientBits;
+    intargvector m_numGradientBits;
     bool m_bufferedAsyncGradientAggregation;
     bool m_zeroThresholdFor1Bit;
 
@@ -289,6 +288,8 @@ protected:
     double m_seqGammarCalcWP;
     double m_seqGammarCalcbMMIFactor;
     bool m_seqGammarCalcUsesMBR;
+    
+    bool m_disableWkInBatchNormal;  // TODO: comment?
 };
 
 template <class ElemType>
@@ -469,7 +470,7 @@ protected:
                          /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
                          const std::string& prefixMsg = "");
 
-    void InitDistGradAgg(int numEvalNodes, int traceLevel);
+    void InitDistGradAgg(int numEvalNodes, int numGradientBits, int traceLevel);
     void InitModelAggregationHandler(int traceLevel, DEVICEID_TYPE devID);
 public:
     // UpdateWeights() - actual weight update, implementing various update rules
@@ -491,6 +492,7 @@ protected:
     void SaveCheckPointInfo(const size_t epoch, const size_t totalSamplesSeen, // TODO: combine totalSamplesSeen and prevCriterion into a EpochCriterion type
                             const double learnRatePerSample,
                             const std::list<Matrix<ElemType>>& smoothedGradients,
+                            const std::vector<double>& smoothedCounts,
                             const double prevCriterion,
                             const size_t minibatchSize);
 
@@ -498,12 +500,14 @@ protected:
                                /*out*/ size_t& totalSamplesSeen,
                                /*out*/ double& learnRatePerSample,
                                std::list<Matrix<ElemType>>& smoothedGradients,
+                               std::vector<double>& smoothedCounts,
                                /*out*/ double& prevCriterion,
                                /*out*/ size_t& minibatchSize);
     void LoadCheckPointInfo(const size_t epochNumber,
                             /*out*/ size_t& totalSamplesSeen,
                             /*out*/ double& learnRatePerSample,
                             std::list<Matrix<ElemType>>& smoothedGradients,
+                            std::vector<double>& smoothedCounts,
                             /*out*/ double& prevCriterion,
                             /*out*/ size_t& minibatchSize);
 

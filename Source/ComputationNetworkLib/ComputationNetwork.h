@@ -136,6 +136,10 @@ public:
     // main entry point for backprop
     void Backprop(const ComputationNodeBasePtr rootNode);
 
+    // partial forward entry
+    void ForwardProp(const ComputationNodeBasePtr rootNode, const ComputationNodeBasePtr startNode, 
+                     const ComputationNodeBasePtr endNode);
+
     template <class NODESET> // version that takes multiple nodes
     void ForwardProp(const NODESET& nodes)
     {
@@ -806,9 +810,9 @@ public:
 
     void SetTraceLevel(int traceLevel)
     {
-        m_environment->SetTraceLevel(traceLevel);
+        m_environment->traceLevel = traceLevel;
     }
-    int TraceLevel() const { return m_environment->m_traceLevel; }
+    int TraceLevel() const { return m_environment->traceLevel; }
 
     // call EnableNodeTracing() on the given nodes for real, category, and sparse printing
     void EnableNodeTracing(const std::vector<std::wstring>& traceNodeNamesReal,
@@ -1040,6 +1044,9 @@ protected:
         virtual void AllocateGradientMatricesForInputs(MatrixPool& matrixPool);
         virtual void RequestMatricesBeforeBackprop(MatrixPool& matrixPool);
         virtual void ReleaseMatricesAfterBackprop(MatrixPool& matrixPool);
+
+        // TODO: Why is this virtual?
+        virtual void ForwardProp(const FrameRange&, const ComputationNodeBasePtr, const ComputationNodeBasePtr) override;
 
     public:
         // this special constructor constructs the top-level network node

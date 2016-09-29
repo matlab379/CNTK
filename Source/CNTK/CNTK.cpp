@@ -103,6 +103,16 @@ size_t GetMaxEpochs(const ConfigParameters& configParams)
     return maxEpochs;
 }
 
+// Currently we force determinism by setting compatibility mode for different CPU versions
+// and limiting computation to a single CPU thread.
+// TODO: Clarify how a single thread restriction can be lifted.
+void ForceDeterministicAlgorithmsOnCPU()
+{
+    LOGPRINTF(stderr, "WARNING: forceDeterministcAlgorithms flag is specified. Using 1 CPU thread for processing.\n");
+    CPUMatrix<float /*any type will do*/>::SetNumThreads(1);
+    CPUMatrix<float /*any type will do*/>::SetCompatibleMode();
+}
+
 #ifndef CPUONLY
 // abort execution is GPU is not supported (e.g. compute capability not supported)
 void CheckSupportForGpu(DEVICEID_TYPE deviceId)
@@ -155,7 +165,7 @@ static void DisableLegacyUsage(const ConfigParameters& TopLevelConfig, const Con
 
 // When running in parallel with MPI, only commands in 'commandstoRunOnAllRanks' should
 // be run in parallel across multiple ranks. Others should only run on rank 0
-const std::set<std::string> commandstoRunOnAllRanks = { "train", "trainRNN", "adapt", "test", "eval", "cv", "devtest" };
+const std::set<std::string> commandstoRunOnAllRanks = { "train", "trainRNN", "adapt", "test", "eval", "cv", "devtest", "pbn" };
 
 // process the command
 template <typename ElemType>
@@ -163,12 +173,17 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
 {
     ConfigArray command = config(L"command", "train");
 
-    int numCPUThreads = config(L"numCPUThreads", "0");
-    numCPUThreads = CPUMatrix<ElemType>::SetNumThreads(numCPUThreads);
-
-    if (numCPUThreads > 0)
+    if (Globals::ShouldForceDeterministicAlgorithms())
+        ForceDeterministicAlgorithmsOnCPU();
+    else
     {
-        LOGPRINTF(stderr, "Using %d CPU threads.\n", numCPUThreads);
+        // Setting specified number of threads.
+        int numCPUThreads = config(L"numCPUThreads", "0");
+        numCPUThreads = CPUMatrix<ElemType>::SetNumThreads(numCPUThreads);
+        if (numCPUThreads > 0)
+        {
+            LOGPRINTF(stderr, "Using %d CPU threads.\n", numCPUThreads);
+        }
     }
 
     bool progressTracing = config(L"progressTracing", false);
@@ -218,7 +233,8 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
     for (int i = 0; i < command.size(); i++)
     {
         // get the configuration parameters that match the command
-        ConfigParameters commandParams(config(command[i]));
+        const string thisCommand = command[i];
+        ConfigParameters commandParams(config(thisCommand));
         ConfigArray action = commandParams("action", "train");
         int traceLevel = commandParams("traceLevel", "0");
 
@@ -230,15 +246,15 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
         // determine the action to perform, and do it
         for (int j = 0; j < action.size(); j++)
         {
-            string thisAction = action[j];
+            const string thisAction = action[j];
 
             // print a banner to visually separate each action in the log
             const char* delim = "##############################################################################";
-            const char* prefix = "Action ";
+            string showActionAs = thisCommand + " command (" + thisAction + " action)";
             fprintf(stderr, "\n");
             LOGPRINTF(stderr, "%s\n", delim);
             LOGPRINTF(stderr, "#%*s#\n", (int)(strlen(delim) - 2), "");
-            LOGPRINTF(stderr, "# %s\"%s\"%*s #\n", prefix, thisAction.c_str(), (int)(strlen(delim) - strlen(prefix) - thisAction.size() - 6), "");
+            LOGPRINTF(stderr, "# %s%*s #\n", showActionAs.c_str(), (int)(strlen(delim) - showActionAs.size() - 4), "");
             LOGPRINTF(stderr, "#%*s#\n", (int)(strlen(delim) - 2), "");
             LOGPRINTF(stderr, "%s\n\n", delim);
 
@@ -256,6 +272,11 @@ void DoCommands(const ConfigParameters& config, const shared_ptr<MPIWrapper>& mp
                         LOGPRINTF(stderr, "CNTKCommandTrainEnd: %s\n", command[i].c_str());
                     }
                     fullEpochsOffset += GetMaxEpochs(commandParams);
+                }
+                // TODO: Choose a clearer name.
+                else if (thisAction == "pbn")
+                {
+                    DoEvalBN<ElemType>(commandParams);
                 }
                 else if (thisAction == "adapt")
                 {
@@ -558,10 +579,15 @@ int wmainWithBS(int argc, wchar_t* argv[]) // called from wmain which is a wrapp
 
     // execute the actions
     // std::string type = config(L"precision", "float");
-    int numCPUThreads = config(L"numCPUThreads", 0);
-    numCPUThreads = CPUMatrix<float /*any will do*/>::SetNumThreads(numCPUThreads);
-    if (numCPUThreads > 0)
-        LOGPRINTF(stderr, "Using %d CPU threads.\n", numCPUThreads);
+    if (Globals::ShouldForceDeterministicAlgorithms())
+        ForceDeterministicAlgorithmsOnCPU();
+    else
+    {
+        int numCPUThreads = config(L"numCPUThreads", 0);
+        numCPUThreads = CPUMatrix<float /*any will do*/>::SetNumThreads(numCPUThreads);
+        if (numCPUThreads > 0)
+            LOGPRINTF(stderr, "Using %d CPU threads.\n", numCPUThreads);
+    }
 
     bool progressTracing = config(L"progressTracing", false);
     size_t fullTotalMaxEpochs = 1; // BUGBUG: BS does not allow me to read out the max epochs parameters, as that would instantiate and thus execute the objects
@@ -607,11 +633,9 @@ int wmainWithBS(int argc, wchar_t* argv[]) // called from wmain which is a wrapp
 // main() for CNTK config language (this is the current way of using CNTK)
 // ---------------------------------------------------------------------------
 
-// helper to print a little banner
-// CNTK 1.7+ (fseide/samplebs hash, Sep 3 2016 00:17:33) on FSEIDE-GPU at 2016/09/03 00:25:30
 static void PrintBanner(int argc, wchar_t* argv[], const string& timestamp)
 {
-    fprintf(stderr, "CNTK 1.7+ (");
+    fprintf(stderr, "CNTK 1.7.1+ (");
 #ifdef _GIT_EXIST
     fprintf(stderr, "%s %.6s, ", _BUILDBRANCH_, _BUILDSHA1_);
 #endif
@@ -719,6 +743,8 @@ int wmainOldCNTKConfig(int argc, wchar_t* argv[])
         LOGPRINTF(stderr, "%s\n", config.ResolveVariables(rawConfigString).c_str());
     }
 #endif
+
+    SetMathLibTraceLevel(traceLevel);
 
     // This outputs the final value each variable/parameter is assigned to in config (so if a parameter is set multiple times, only the last
     // value it is set to will appear).
