@@ -350,7 +350,7 @@ shared_ptr<Matrix<ElemType>> TensorView<ElemType>::AsMatrix() const
     else                                                  // dense can slice and reshape neutrally, but will also fail if output matrix needs to move devices
     {
         shared_ptr<Matrix<ElemType>> ptr = m_sob->ColumnSlicePtr(firstColumn, numColumns);
-        ptr->Reshape(m_shape[0], m_shape[1]));
+        ptr->Reshape(m_shape[0], m_shape[1]);
         return ptr;
     }
 }
