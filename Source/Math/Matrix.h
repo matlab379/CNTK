@@ -627,6 +627,7 @@ typedef Matrix<double> DoubleMatrix;
 
 class TemporaryMatrix
 {
+    static const int32_t MAX_MATRICES = 10;
     vector<shared_ptr<Matrix<float>>>  m_releasedFloatMatrices;
     vector<shared_ptr<Matrix<double>>> m_releasedDoubleMatrices;
 
@@ -644,7 +645,7 @@ public:
                 return releasedMatrices[c];
         }
         matrixPtr = make_shared<Matrix<ElemType>>(deviceId);
-        if (releasedMatrices.size() < 10)
+        if (releasedMatrices.size() < MAX_MATRICES)
         {
             releasedMatrices.emplace_back(matrixPtr);
         }
