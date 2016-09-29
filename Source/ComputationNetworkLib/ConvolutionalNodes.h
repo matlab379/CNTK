@@ -586,13 +586,13 @@ public:
     void Save(File& fstream) const override
     {
         Base::Save(fstream);
-        fstream << m_outputShape;
+        m_outputShape.Save(fstream);
     }
 
     void Load(File& fstream, size_t modelVersion) override
     {
         Base::Load(fstream, modelVersion);
-        fstream >> m_outputShape;
+        m_outputShape.Load(fstream);
     }
 
     void Validate(bool isFinalValidationPass) override
